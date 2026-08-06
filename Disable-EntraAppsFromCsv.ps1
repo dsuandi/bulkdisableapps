@@ -90,21 +90,29 @@ if (-not $SkipConnect) {
     Connect-MgGraph @connectParameters | Out-Null
 }
 
-$applications = Import-Csv -LiteralPath $CsvPath
 $requiredColumns = @('applicationId', 'applicationName')
-$headerLine = Get-Content -LiteralPath $CsvPath -TotalCount 1
+$csvHeaderParser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($CsvPath)
+$csvHeaderParser.HasFieldsEnclosedInQuotes = $true
+$csvHeaderParser.SetDelimiters(',')
 
-if ([string]::IsNullOrWhiteSpace($headerLine)) {
-    throw 'CSV file must contain a header row.'
+try {
+    $actualColumns = @($csvHeaderParser.ReadFields() | ForEach-Object { $_.Trim() })
+}
+finally {
+    $csvHeaderParser.Dispose()
 }
 
-$actualColumns = @($headerLine.Split(',') | ForEach-Object { $_.Trim().Trim('"') })
+if ($actualColumns.Count -eq 0) {
+    throw 'CSV file must contain a header row.'
+}
 
 foreach ($requiredColumn in $requiredColumns) {
     if ($actualColumns -notcontains $requiredColumn) {
         throw "CSV file must contain a '$requiredColumn' column."
     }
 }
+
+$applications = Import-Csv -LiteralPath $CsvPath
 
 foreach ($application in $applications) {
     Disable-EntraApplicationFromRow -Row $application
