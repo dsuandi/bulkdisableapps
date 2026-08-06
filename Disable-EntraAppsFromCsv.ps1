@@ -92,7 +92,13 @@ if (-not $SkipConnect) {
 
 $applications = Import-Csv -LiteralPath $CsvPath
 $requiredColumns = @('applicationId', 'applicationName')
-$actualColumns = @($applications | Select-Object -First 1 | ForEach-Object { $_.PSObject.Properties.Name })
+$headerLine = Get-Content -LiteralPath $CsvPath -TotalCount 1
+
+if ([string]::IsNullOrWhiteSpace($headerLine)) {
+    throw 'CSV file must contain a header row.'
+}
+
+$actualColumns = @($headerLine.Split(',') | ForEach-Object { $_.Trim().Trim('"') })
 
 foreach ($requiredColumn in $requiredColumns) {
     if ($actualColumns -notcontains $requiredColumn) {
