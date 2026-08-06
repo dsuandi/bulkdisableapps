@@ -93,14 +93,23 @@ if (-not $SkipConnect) {
 }
 
 $requiredColumns = @('applicationId', 'applicationName')
-$headerLine = Get-Content -LiteralPath $CsvPath -TotalCount 1
+$applications = @(Import-Csv -LiteralPath $CsvPath)
 
-if ([string]::IsNullOrWhiteSpace($headerLine)) {
-    throw 'CSV file must contain a header row.'
+if ($applications.Count -gt 0) {
+    $rawColumns = @($applications[0].PSObject.Properties.Name)
+}
+else {
+    $headerLine = Get-Content -LiteralPath $CsvPath -TotalCount 1
+
+    if ([string]::IsNullOrWhiteSpace($headerLine)) {
+        throw 'CSV file must contain a header row.'
+    }
+
+    $rawColumns = @($headerLine.Split(',') | ForEach-Object { $_.Trim().Trim('"') })
 }
 
 $actualColumns = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$headerLine.Split(',') | ForEach-Object { [void]$actualColumns.Add($_.Trim().Trim('"')) }
+$rawColumns | ForEach-Object { [void]$actualColumns.Add($_) }
 
 foreach ($requiredColumn in $requiredColumns) {
     if (-not $actualColumns.Contains($requiredColumn)) {
@@ -108,7 +117,10 @@ foreach ($requiredColumn in $requiredColumns) {
     }
 }
 
-$applications = Import-Csv -LiteralPath $CsvPath
+if ($applications.Count -eq 0) {
+    Write-Warning 'CSV file contains no application rows to process.'
+    return
+}
 
 foreach ($application in $applications) {
     $disableParameters = @{
