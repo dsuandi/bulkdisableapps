@@ -111,6 +111,68 @@ function Read-Consent {
     }
 }
 
+function Write-RunHeader {
+    param([Parameter(Mandatory)][hashtable] $Info)
+
+    $bar = '=' * 64
+    $lines = @(
+        $bar,
+        ' Bulk Disable Entra App Registrations',
+        $bar,
+        (' Run started : {0}' -f $Info.StartedAt),
+        (' Run by      : {0}' -f $Info.Account),
+        (' Tenant ID   : {0}' -f $Info.TenantId),
+        (' Host        : {0} / {1} (PowerShell {2})' -f $Info.HostName, $Info.OS, $Info.PSVersion),
+        (' CSV input   : {0}  ({1} rows)' -f $Info.CsvPath, $Info.RowCount),
+        (' Scopes      : {0}' -f ($Info.Scopes -join ', ')),
+        (' -Force      : {0}' -f $Info.Force),
+        $bar
+    )
+    $lines | ForEach-Object { Write-Host $_ }
+}
+
+function Write-RunFooter {
+    param([Parameter(Mandatory)][hashtable] $Stats)
+
+    $bar = '=' * 64
+    Write-Host $bar
+    Write-Host ' Run Summary'
+    Write-Host $bar
+    Write-Host (' Run by      : {0}' -f $Stats.Account)
+    Write-Host (' Tenant ID   : {0}' -f $Stats.TenantId)
+    Write-Host (' Run started : {0}' -f $Stats.StartedAt)
+    Write-Host (' Run ended   : {0}' -f $Stats.EndedAt)
+    Write-Host (' Duration    : {0}' -f $Stats.Duration)
+    Write-Host (' CSV input   : {0}' -f $Stats.CsvPath)
+    Write-Host (' Total rows  : {0}' -f $Stats.TotalRows)
+    Write-Host ''
+    Write-Host ' Results'
+    Write-Host ' -------'
+    Write-Host (' Disabled           : {0,3}' -f $Stats.Disabled)
+    Write-Host (' Already disabled   : {0,3}' -f $Stats.AlreadyDisabled)
+    Write-Host (' Skipped (user)     : {0,3}' -f $Stats.SkippedUser)
+    Write-Host (' Skipped (invalid)  : {0,3}' -f $Stats.SkippedInvalid)
+    Write-Host (' Not found          : {0,3}' -f $Stats.NotFound)
+    Write-Host (' Failed             : {0,3}' -f $Stats.Failed)
+    $stoppedText = if ($Stats.StoppedEarly) { 'Yes' } else { 'No' }
+    Write-Host (' Stopped early (Q)  : {0}' -f $stoppedText)
+    if ($Stats.StoppedEarly) {
+        Write-Host (' Remaining (not processed) : {0}' -f $Stats.Remaining)
+    }
+    $forceText = if ($Stats.Force) { 'Yes' } else { 'No' }
+    Write-Host (' -Force mode        : {0}' -f $forceText)
+
+    if ($Stats.FailedRows -and $Stats.FailedRows.Count -gt 0) {
+        Write-Host ''
+        Write-Host ' Failed rows (see transcript above for details)'
+        Write-Host ' ----------------------------------------------'
+        foreach ($f in $Stats.FailedRows) {
+            Write-Host (' - {0}  "{1}"  :  {2}' -f $f.AppId, $f.DisplayName, $f.Message)
+        }
+    }
+    Write-Host $bar
+}
+
 function Main {
     Assert-Prereqs
     $rows = @(Read-AppRows -Path $CsvPath)
