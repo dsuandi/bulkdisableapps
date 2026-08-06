@@ -54,6 +54,29 @@ function Read-AppRows {
     }
 }
 
+function Get-AppServicePrincipal {
+    param([Parameter(Mandatory)][string] $AppId)
+
+    # Graph filter uses OData syntax; expect 0 or 1 result.
+    Get-MgServicePrincipal -Filter "appId eq '$AppId'" -ConsistencyLevel eventual -CountVariable c -ErrorAction Stop |
+        Select-Object -First 1
+}
+
+function Invoke-DisableApp {
+    param(
+        [Parameter(Mandatory)][string] $ServicePrincipalId,
+        [Parameter(Mandatory)][string] $DisplayName
+    )
+
+    try {
+        Update-MgServicePrincipal -ServicePrincipalId $ServicePrincipalId -AccountEnabled:$false -ErrorAction Stop
+        return @{ Status = 'DISABLED'; Message = $null }
+    }
+    catch {
+        return @{ Status = 'FAILED'; Message = $_.Exception.Message }
+    }
+}
+
 function Main {
     Assert-Prereqs
     $rows = @(Read-AppRows -Path $CsvPath)
