@@ -77,6 +77,40 @@ function Invoke-DisableApp {
     }
 }
 
+function Read-Consent {
+    param(
+        [Parameter(Mandatory)][string] $AppId,
+        [Parameter(Mandatory)][string] $GraphDisplayName,
+        [Parameter()][string] $CsvDisplayName,
+        [Parameter()][bool] $Force,
+        [Parameter()][ref] $ApproveAll
+    )
+
+    if ($Force -or $ApproveAll.Value) { return 'YES' }
+
+    $csvHint = ''
+    if ($CsvDisplayName -and ($CsvDisplayName -ne $GraphDisplayName)) {
+        $csvHint = " (CSV said: `"$CsvDisplayName`")"
+    }
+    Write-Host ""
+    Write-Host ("About to disable  {0}  ""{1}""{2}" -f $AppId, $GraphDisplayName, $csvHint) -ForegroundColor Cyan
+
+    while ($true) {
+        $answer = (Read-Host "Disable this app? [Y]es / [N]o / [A]ll / [Q]uit").Trim().ToUpperInvariant()
+        switch ($answer) {
+            'Y'   { return 'YES' }
+            'YES' { return 'YES' }
+            'N'   { return 'NO' }
+            'NO'  { return 'NO' }
+            'A'   { $ApproveAll.Value = $true; return 'YES' }
+            'ALL' { $ApproveAll.Value = $true; return 'YES' }
+            'Q'   { return 'QUIT' }
+            'QUIT'{ return 'QUIT' }
+            default { Write-Host "Please answer Y, N, A, or Q." -ForegroundColor Yellow }
+        }
+    }
+}
+
 function Main {
     Assert-Prereqs
     $rows = @(Read-AppRows -Path $CsvPath)
