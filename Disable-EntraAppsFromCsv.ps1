@@ -105,7 +105,8 @@ else {
         throw 'CSV file must contain a header row.'
     }
 
-    $rawColumns = @($headerLine.Split(',') | ForEach-Object { $_.Trim().Trim('"') })
+    $headerObject = @($headerLine, ',,,,,,,,,,,,,,,,,,,') | ConvertFrom-Csv
+    $rawColumns = @($headerObject.PSObject.Properties.Name)
 }
 
 $actualColumns = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -123,15 +124,5 @@ if ($applications.Count -eq 0) {
 }
 
 foreach ($application in $applications) {
-    $disableParameters = @{
-        Row = $application
-    }
-
-    foreach ($commonParameter in @('WhatIf', 'Confirm')) {
-        if ($PSBoundParameters.ContainsKey($commonParameter)) {
-            $disableParameters[$commonParameter] = $PSBoundParameters[$commonParameter]
-        }
-    }
-
-    Disable-EntraApplicationFromRow @disableParameters
+    Disable-EntraApplicationFromRow -Row $application
 }
