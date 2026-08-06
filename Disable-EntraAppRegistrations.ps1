@@ -77,6 +77,20 @@ function Invoke-DisableApp {
     }
 }
 
+function Test-ProtectedSp {
+    param([Parameter(Mandatory)] $ServicePrincipal)
+
+    $microsoftTenantId = 'f8cdef31-a31e-4b4a-93e4-5f571e91255a'
+
+    if ($ServicePrincipal.ServicePrincipalType -eq 'ManagedIdentity') {
+        return @{ Protected = $true; Reason = 'ManagedIdentity — disabling breaks the Azure resource that owns it' }
+    }
+    if ($ServicePrincipal.AppOwnerOrganizationId -eq $microsoftTenantId) {
+        return @{ Protected = $true; Reason = 'Microsoft first-party SP' }
+    }
+    return @{ Protected = $false; Reason = $null }
+}
+
 function Read-Consent {
     param(
         [Parameter(Mandatory)][string] $AppId,
