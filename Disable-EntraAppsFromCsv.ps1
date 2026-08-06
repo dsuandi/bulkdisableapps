@@ -124,5 +124,5 @@ foreach ($requiredColumn in $requiredColumns) {
 $applications = Import-Csv -LiteralPath $CsvPath
 
 foreach ($application in $applications) {
-    Disable-EntraApplicationFromRow -Row $application
+    Disable-EntraApplicationFromRow -Row $application -WhatIf:$WhatIfPreference
 }
