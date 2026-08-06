@@ -106,7 +106,8 @@ else {
     }
 
     # ConvertFrom-Csv needs one data row before it exposes parsed header names.
-    $headerObject = @($headerLine, ',,,,,,,,,,,,,,,,,,,') | ConvertFrom-Csv
+    $dummyRow = ',' * [Math]::Max(1, ($headerLine.ToCharArray() | Where-Object { $_ -eq ',' }).Count)
+    $headerObject = @($headerLine, $dummyRow) | ConvertFrom-Csv
     $rawColumns = @($headerObject.PSObject.Properties.Name)
 }
 
