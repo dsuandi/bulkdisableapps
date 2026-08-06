@@ -166,6 +166,7 @@ function Write-RunFooter {
     Write-Host (' Already disabled   : {0,3}' -f $Stats.AlreadyDisabled)
     Write-Host (' Skipped (user)     : {0,3}' -f $Stats.SkippedUser)
     Write-Host (' Skipped (invalid)  : {0,3}' -f $Stats.SkippedInvalid)
+    Write-Host (' Skipped (protected): {0,3}' -f $Stats.SkippedProtected)
     Write-Host (' Not found          : {0,3}' -f $Stats.NotFound)
     Write-Host (' Failed             : {0,3}' -f $Stats.Failed)
     $stoppedText = if ($Stats.StoppedEarly) { 'Yes' } else { 'No' }
@@ -211,7 +212,7 @@ function Main {
         EndedAt = $null; Duration = $null
         CsvPath = $CsvPath; TotalRows = $rows.Count
         Disabled = 0; AlreadyDisabled = 0
-        SkippedUser = 0; SkippedInvalid = 0
+        SkippedUser = 0; SkippedInvalid = 0; SkippedProtected = 0
         NotFound = 0; Failed = 0
         StoppedEarly = $false; Remaining = 0
         Force = [bool]$Force
@@ -266,6 +267,13 @@ function Main {
             if ($sp.AccountEnabled -eq $false) {
                 Write-Host ("ALREADY DISABLED   {0}  ""{1}""" -f $row.AppId, $sp.DisplayName) -ForegroundColor Yellow
                 $stats.AlreadyDisabled++
+                continue
+            }
+
+            $guard = Test-ProtectedSp -ServicePrincipal $sp
+            if ($guard.Protected) {
+                Write-Host ("SKIPPED (protected) {0}  ""{1}""  :  {2}" -f $row.AppId, $sp.DisplayName, $guard.Reason) -ForegroundColor Magenta
+                $stats.SkippedProtected++
                 continue
             }
 
