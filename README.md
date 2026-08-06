@@ -46,6 +46,15 @@ At the consent prompt, valid answers are `Y` (yes, this one), `N` (skip this one
 - **Console:** one colored line per row (`DISABLED` / `ALREADY DISABLED` / `SKIPPED` / `NOT FOUND` / `FAILED`).
 - **Transcript:** written to `./logs/disable-apps-<yyyyMMdd-HHmmss>.txt` by default. Starts with an identity header (who ran it, tenant, host, CSV path, scopes) and ends with a summary footer listing counters and any failed rows. `./logs/` is gitignored.
 
+## Safety guardrails
+
+The script refuses to disable service principals in these categories, even under `-Force`:
+
+- **Microsoft first-party SPs** (`AppOwnerOrganizationId = f8cdef31-a31e-4b4a-93e4-5f571e91255a`) — disabling these can break Entra itself, Microsoft Graph, or portal admin tools.
+- **Managed identities** (`ServicePrincipalType = ManagedIdentity`) — disabling breaks the Azure resource (VM, Function App, App Service, etc.) that owns them.
+
+Such rows appear in the console as `SKIPPED (protected)` and in the footer under `Skipped (protected)`. If you truly need to disable one of these, use the Entra portal or `Update-MgServicePrincipal` directly — there is no override flag on this script.
+
 ## Exit codes
 
 | Code | Meaning |
