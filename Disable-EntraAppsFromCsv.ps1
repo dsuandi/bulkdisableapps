@@ -28,6 +28,7 @@ function Assert-GraphCommand {
 }
 
 function Disable-EntraApplicationFromRow {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     param(
         [Parameter(Mandatory = $true)]
         [pscustomobject]$Row
