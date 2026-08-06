@@ -93,25 +93,29 @@ if (-not $SkipConnect) {
 
 $requiredColumns = @('applicationId', 'applicationName')
 Add-Type -AssemblyName Microsoft.VisualBasic
-$csvHeaderParser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($CsvPath)
-$csvHeaderParser.HasFieldsEnclosedInQuotes = $true
-$csvHeaderParser.SetDelimiters(',')
+$csvHeaderParser = $null
 
 try {
+    $csvHeaderParser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($CsvPath)
+    $csvHeaderParser.HasFieldsEnclosedInQuotes = $true
+    $csvHeaderParser.SetDelimiters(',')
     $rawColumns = $csvHeaderParser.ReadFields()
 }
 finally {
-    $csvHeaderParser.Dispose()
+    if ($null -ne $csvHeaderParser) {
+        $csvHeaderParser.Dispose()
+    }
 }
 
 if ($null -eq $rawColumns -or $rawColumns.Count -eq 0) {
     throw 'CSV file must contain a header row.'
 }
 
-$actualColumns = @($rawColumns | ForEach-Object { $_.Trim() })
+$actualColumns = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+$rawColumns | ForEach-Object { [void]$actualColumns.Add($_.Trim()) }
 
 foreach ($requiredColumn in $requiredColumns) {
-    if ($actualColumns -notcontains $requiredColumn) {
+    if (-not $actualColumns.Contains($requiredColumn)) {
         throw "CSV file must contain a '$requiredColumn' column."
     }
 }
