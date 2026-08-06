@@ -31,9 +31,40 @@ function Assert-Prereqs {
     }
 }
 
+function Read-AppRows {
+    param([Parameter(Mandatory)][string] $Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "CSV file not found: $Path"
+    }
+
+    $guidRegex = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
+    Import-Csv -LiteralPath $Path | ForEach-Object {
+        $appId = ($_.AppId ?? '').Trim()
+        $name  = ($_.DisplayName ?? '').Trim()
+        $valid = $appId -match $guidRegex
+
+        [pscustomobject]@{
+            AppId       = $appId
+            DisplayName = $name
+            IsValid     = $valid
+            Reason      = if ($valid) { $null } elseif (-not $appId) { 'blank AppId' } else { 'AppId is not a GUID' }
+        }
+    }
+}
+
 function Main {
     Assert-Prereqs
-    Write-Host "Skeleton OK. CsvPath = $CsvPath"
+    $rows = @(Read-AppRows -Path $CsvPath)
+    Write-Host "Rows read: $($rows.Count)"
+    foreach ($r in $rows) {
+        if ($r.IsValid) {
+            Write-Host ("  OK    {0}  ""{1}""" -f $r.AppId, $r.DisplayName)
+        } else {
+            Write-Host ("  BAD   {0}  ({1})" -f $r.AppId, $r.Reason) -ForegroundColor Yellow
+        }
+    }
 }
 
 try {
