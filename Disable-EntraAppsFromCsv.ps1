@@ -105,6 +105,7 @@ else {
         throw 'CSV file must contain a header row.'
     }
 
+    # ConvertFrom-Csv needs one data row before it exposes parsed header names.
     $headerObject = @($headerLine, ',,,,,,,,,,,,,,,,,,,') | ConvertFrom-Csv
     $rawColumns = @($headerObject.PSObject.Properties.Name)
 }
