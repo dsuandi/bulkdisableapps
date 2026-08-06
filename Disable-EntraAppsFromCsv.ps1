@@ -93,27 +93,14 @@ if (-not $SkipConnect) {
 }
 
 $requiredColumns = @('applicationId', 'applicationName')
-Add-Type -AssemblyName Microsoft.VisualBasic
-$csvHeaderParser = $null
+$headerLine = Get-Content -LiteralPath $CsvPath -TotalCount 1
 
-try {
-    $csvHeaderParser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($CsvPath)
-    $csvHeaderParser.HasFieldsEnclosedInQuotes = $true
-    $csvHeaderParser.SetDelimiters(',')
-    $rawColumns = $csvHeaderParser.ReadFields()
-}
-finally {
-    if ($null -ne $csvHeaderParser) {
-        $csvHeaderParser.Dispose()
-    }
-}
-
-if ($null -eq $rawColumns -or $rawColumns.Count -eq 0) {
+if ([string]::IsNullOrWhiteSpace($headerLine)) {
     throw 'CSV file must contain a header row.'
 }
 
 $actualColumns = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-$rawColumns | ForEach-Object { [void]$actualColumns.Add($_.Trim()) }
+$headerLine.Split(',') | ForEach-Object { [void]$actualColumns.Add($_.Trim().Trim('"')) }
 
 foreach ($requiredColumn in $requiredColumns) {
     if (-not $actualColumns.Contains($requiredColumn)) {
@@ -124,5 +111,15 @@ foreach ($requiredColumn in $requiredColumns) {
 $applications = Import-Csv -LiteralPath $CsvPath
 
 foreach ($application in $applications) {
-    Disable-EntraApplicationFromRow -Row $application -WhatIf:$WhatIfPreference
+    $disableParameters = @{
+        Row = $application
+    }
+
+    foreach ($commonParameter in @('WhatIf', 'Confirm')) {
+        if ($PSBoundParameters.ContainsKey($commonParameter)) {
+            $disableParameters[$commonParameter] = $PSBoundParameters[$commonParameter]
+        }
+    }
+
+    Disable-EntraApplicationFromRow @disableParameters
 }
