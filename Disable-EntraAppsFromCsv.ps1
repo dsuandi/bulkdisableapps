@@ -42,7 +42,7 @@ function Disable-EntraApplicationFromRow {
     }
 
     try {
-        [void][guid]$applicationId
+        $applicationGuid = [guid]$applicationId
     }
     catch {
         Write-Warning "Skipping applicationId '$applicationId' because it is not a valid GUID."
@@ -53,7 +53,8 @@ function Disable-EntraApplicationFromRow {
         Write-Warning "CSV row for applicationId '$applicationId' has an empty applicationName."
     }
 
-    $servicePrincipals = @(Get-MgServicePrincipal -Filter "appId eq '$applicationId'" -All)
+    $normalizedApplicationId = $applicationGuid.ToString()
+    $servicePrincipals = @(Get-MgServicePrincipal -Filter "appId eq '$normalizedApplicationId'" -All)
 
     if ($servicePrincipals.Count -eq 0) {
         Write-Warning "No service principal was found for applicationId '$applicationId' ($applicationName)."
@@ -91,20 +92,23 @@ if (-not $SkipConnect) {
 }
 
 $requiredColumns = @('applicationId', 'applicationName')
+Add-Type -AssemblyName Microsoft.VisualBasic
 $csvHeaderParser = [Microsoft.VisualBasic.FileIO.TextFieldParser]::new($CsvPath)
 $csvHeaderParser.HasFieldsEnclosedInQuotes = $true
 $csvHeaderParser.SetDelimiters(',')
 
 try {
-    $actualColumns = @($csvHeaderParser.ReadFields() | ForEach-Object { $_.Trim() })
+    $rawColumns = $csvHeaderParser.ReadFields()
 }
 finally {
     $csvHeaderParser.Dispose()
 }
 
-if ($actualColumns.Count -eq 0) {
+if ($null -eq $rawColumns -or $rawColumns.Count -eq 0) {
     throw 'CSV file must contain a header row.'
 }
+
+$actualColumns = @($rawColumns | ForEach-Object { $_.Trim() })
 
 foreach ($requiredColumn in $requiredColumns) {
     if ($actualColumns -notcontains $requiredColumn) {
