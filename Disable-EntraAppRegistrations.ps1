@@ -175,22 +175,140 @@ function Write-RunFooter {
 
 function Main {
     Assert-Prereqs
+
+    # --- 1. Read + validate CSV up front so we know row count for the header
     $rows = @(Read-AppRows -Path $CsvPath)
-    Write-Host "Rows read: $($rows.Count)"
-    foreach ($r in $rows) {
-        if ($r.IsValid) {
-            Write-Host ("  OK    {0}  ""{1}""" -f $r.AppId, $r.DisplayName)
-        } else {
-            Write-Host ("  BAD   {0}  ({1})" -f $r.AppId, $r.Reason) -ForegroundColor Yellow
+
+    # --- 2. Compute transcript path and start transcript
+    $ts = Get-Date -Format 'yyyyMMdd-HHmmss'
+    if (-not $TranscriptPath) {
+        $logsDir = Join-Path -Path (Get-Location) -ChildPath 'logs'
+        if (-not (Test-Path -LiteralPath $logsDir)) {
+            New-Item -ItemType Directory -Path $logsDir | Out-Null
         }
+        $TranscriptPath = Join-Path -Path $logsDir -ChildPath "disable-apps-$ts.txt"
+    }
+    Start-Transcript -Path $TranscriptPath -Append | Out-Null
+
+    $startedAt = Get-Date
+    $stats = @{
+        Account = $null; TenantId = $null
+        StartedAt = $startedAt.ToString('yyyy-MM-dd HH:mm:ss zzz')
+        EndedAt = $null; Duration = $null
+        CsvPath = $CsvPath; TotalRows = $rows.Count
+        Disabled = 0; AlreadyDisabled = 0
+        SkippedUser = 0; SkippedInvalid = 0
+        NotFound = 0; Failed = 0
+        StoppedEarly = $false; Remaining = 0
+        Force = [bool]$Force
+        FailedRows = @()
+    }
+
+    try {
+        # --- 3. Connect to Graph
+        $scopes = @('Application.ReadWrite.All','Directory.ReadWrite.All')
+        $connectArgs = @{ Scopes = $scopes; NoWelcome = $true }
+        if ($TenantId) { $connectArgs.TenantId = $TenantId }
+        Connect-MgGraph @connectArgs | Out-Null
+
+        $ctx = Get-MgContext
+        $stats.Account  = $ctx.Account
+        $stats.TenantId = $ctx.TenantId
+
+        # --- 4. Emit header
+        Write-RunHeader -Info @{
+            StartedAt = $stats.StartedAt
+            Account   = $stats.Account
+            TenantId  = $stats.TenantId
+            HostName  = [System.Environment]::MachineName
+            OS        = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+            PSVersion = $PSVersionTable.PSVersion
+            CsvPath   = $CsvPath
+            RowCount  = $rows.Count
+            Scopes    = $scopes
+            Force     = [bool]$Force
+        }
+
+        # --- 5. Per-row loop
+        $approveAll = $false
+        $processed = 0
+        foreach ($row in $rows) {
+            $processed++
+
+            if (-not $row.IsValid) {
+                Write-Host ("SKIPPED (invalid)  {0}  ({1})" -f $row.AppId, $row.Reason) -ForegroundColor Yellow
+                $stats.SkippedInvalid++
+                continue
+            }
+
+            $sp = $null
+            try { $sp = Get-AppServicePrincipal -AppId $row.AppId } catch { $sp = $null }
+            if (-not $sp) {
+                Write-Host ("NOT FOUND          {0}  ""{1}""" -f $row.AppId, $row.DisplayName) -ForegroundColor Red
+                $stats.NotFound++
+                continue
+            }
+
+            if ($sp.AccountEnabled -eq $false) {
+                Write-Host ("ALREADY DISABLED   {0}  ""{1}""" -f $row.AppId, $sp.DisplayName) -ForegroundColor Yellow
+                $stats.AlreadyDisabled++
+                continue
+            }
+
+            $consent = Read-Consent -AppId $row.AppId `
+                                    -GraphDisplayName $sp.DisplayName `
+                                    -CsvDisplayName $row.DisplayName `
+                                    -Force:([bool]$Force) `
+                                    -ApproveAll ([ref]$approveAll)
+
+            if ($consent -eq 'QUIT') {
+                $stats.StoppedEarly = $true
+                $stats.Remaining = $rows.Count - ($processed - 1)
+                Write-Host "Operator chose Q. Stopping." -ForegroundColor Yellow
+                break
+            }
+            if ($consent -eq 'NO') {
+                Write-Host ("SKIPPED (user)     {0}  ""{1}""" -f $row.AppId, $sp.DisplayName) -ForegroundColor Yellow
+                $stats.SkippedUser++
+                continue
+            }
+
+            $result = Invoke-DisableApp -ServicePrincipalId $sp.Id -DisplayName $sp.DisplayName
+            if ($result.Status -eq 'DISABLED') {
+                Write-Host ("DISABLED           {0}  ""{1}""" -f $row.AppId, $sp.DisplayName) -ForegroundColor Green
+                $stats.Disabled++
+            } else {
+                Write-Host ("FAILED             {0}  ""{1}""  :  {2}" -f $row.AppId, $sp.DisplayName, $result.Message) -ForegroundColor Red
+                $stats.Failed++
+                $stats.FailedRows += @{ AppId = $row.AppId; DisplayName = $sp.DisplayName; Message = $result.Message }
+            }
+        }
+
+        # --- 6. Footer + exit code
+        $endedAt = Get-Date
+        $stats.EndedAt  = $endedAt.ToString('yyyy-MM-dd HH:mm:ss zzz')
+        $stats.Duration = ($endedAt - $startedAt).ToString('hh\:mm\:ss')
+        Write-RunFooter -Stats $stats
+
+        if (($stats.Failed -gt 0) -or ($stats.NotFound -gt 0)) {
+            $script:__ExitCode = 1
+        } else {
+            $script:__ExitCode = 0
+        }
+    }
+    finally {
+        try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { }
+        try { Stop-Transcript | Out-Null } catch { }
     }
 }
 
+$script:__ExitCode = 2
 try {
     Main
-    exit 0
+    exit $script:__ExitCode
 }
 catch {
     Write-Error $_ -ErrorAction Continue
+    try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
     exit 2
 }
